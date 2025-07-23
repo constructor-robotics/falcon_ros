@@ -16,24 +16,28 @@
 #include "falcon/firmware/FalconFirmwareNovintSDK.h"
 #include "falcon/util/FalconFirmwareBinaryNvent.h"
 #include "falcon/grip/FalconGripFourButton.h"
-// #include "falcon/util/FalconCLIBase.h"
-// #include "falcon/kinematic/stamper/StamperUtils.h"
 #include "falcon/kinematic/FalconKinematicStamper.h"
-// #include "falcon/core/FalconGeometry.h"
-// #include "falcon/gmtl/gmtl.h"
 
 using namespace libnifalcon;
 using namespace StamperKinematicImpl;
 
 class Controller : public FalconDevice {
-	ros::CallbackQueue cb_queue_;
 	ros::NodeHandle nh_;
+	ros::CallbackQueue cb_queue_;
+
+	geometry_msgs::PoseStamped measured_cp_;
 	ros::Publisher measured_cp_pub_;
+
 	ros::Publisher joy_pub_;
+	sensor_msgs::Joy joy_;
+
 	ros::Subscriber servo_cf_sub_;
 
+	ros::Time now_; // time after last I/O loop
+
 	std::mutex force_mutex_;
-	std::array<double, 3> cmd_force_ = {0.0, 0.0, 0.0};
+	std::array<double, 3> cmd_force_ {0.0, 0.0, 0.0};
+
 public:
 	Controller(ros::NodeHandle nh) :
 		FalconDevice(),
@@ -45,8 +49,20 @@ public:
 
 		// set only kinematic model
 		setFalconKinematic<libnifalcon::FalconKinematicStamper>();
+
+		// set standard 4-button grip (again, the only grip directly available in the library)
 		setFalconGrip<FalconGripFourButton>();
 
+		std::string const frame_id = nh_.param<std::string>("frame_id", "falcon_base");
+
+		// prepare published data
+		joy_.header.frame_id = frame_id;
+		joy_.axes.resize(3);
+		joy_.buttons.resize(getFalconGrip()->getNumDigitalInputs());
+		measured_cp_.header.frame_id = frame_id;
+		measured_cp_.pose.orientation.w = 1.0;
+
+		// ROS communication
 		nh_.setCallbackQueue(&cb_queue_);
 		measured_cp_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("measured_cp", 1, true);
 		joy_pub_ = nh_.advertise<sensor_msgs::Joy>("joy", 1, true);
@@ -59,6 +75,7 @@ public:
 		close();
 	}
 
+	// open device and load firmware
 	bool init(){
 		if(!open(0)) {
 			ROS_ERROR("Failed to connect to device");
@@ -66,8 +83,13 @@ public:
 		}
 
 		bool const skip_checksum = false;
+
+		if (!isFirmwareLoaded()){
+			// this attempt to set the mode fails deterministically, but loadFirmware succeeds on first try this way
+			getFalconComm()->setFirmwareMode();
+		}
+
 		while(!isFirmwareLoaded()) {
-			getFalconComm()->setFirmwareMode(); // this fails initially, but loadFirmware succeeds on first try this way
 			if(getFalconFirmware()->loadFirmware(skip_checksum, NOVINT_FALCON_NVENT_FIRMWARE_SIZE, const_cast<uint8_t*>(NOVINT_FALCON_NVENT_FIRMWARE)))
 				break;
 			ROS_ERROR_STREAM("Failed to upload firmware.");
@@ -79,6 +101,7 @@ public:
 		return true;
 	}
 
+	// block until device is homed (all joint stops were detected)
 	bool home(){
 		runIOLoop(FALCON_LOOP_FIRMWARE);
 		if(getFalconFirmware()->isHomed()) {
@@ -93,7 +116,7 @@ public:
 		if(!getFalconFirmware()->isHomed())
 			ROS_INFO("Falcon not currently homed. Move control all the way out then push straight all the way in.");
 
-		ros::Rate rate{ 100 };
+		ros::Rate rate{ 20 };
 		while(!getFalconFirmware()->isHomed())
 		{
 			if (!ros::ok())
@@ -109,6 +132,7 @@ public:
 		return true;
 	}
 
+	// CRTK: update Cartesian force command
 	void servo_cf(const geometry_msgs::WrenchStamped& msg)
 	{
 		std::lock_guard<std::mutex> lock(force_mutex_);
@@ -117,51 +141,53 @@ public:
 		cmd_force_[2] = msg.wrench.force.z;
 	}
 
+	// CRTK: publish Cartesian pose
+	void measured_cp(){
+		auto const& p_arr = getPosition();
+		measured_cp_.pose.position.x = p_arr[0];
+		measured_cp_.pose.position.y = p_arr[1];
+		measured_cp_.pose.position.z = p_arr[2];
+		measured_cp_.header.stamp = now_;
+		measured_cp_pub_.publish(measured_cp_);
+	}
+
+	// publish joystick message
+	void joy(){
+		auto const& p_arr = getPosition();
+		joy_.header.stamp = now_;
+		joy_.axes[0] = p_arr[0];
+		joy_.axes[1] = p_arr[1];
+		joy_.axes[2] = p_arr[2];
+		for(size_t i = 0; i < getFalconGrip()->getNumDigitalInputs(); ++i) {
+			joy_.buttons[i] = getFalconGrip()->getDigitalInput(i);
+		}
+		joy_pub_.publish(joy_);
+	}
+
+	// set Cartesian force command for next I/O loop
+	void cmd_cf(){
+		std::lock_guard<std::mutex> lock{ force_mutex_ };
+		setForce(cmd_force_);
+	}
+
 	void spin(){
-		runIOLoop();
+		ros::AsyncSpinner spinner{ 1, &cb_queue_ };
+		spinner.start();
+
 		setForce({ 0, 0, 0 });
 		getFalconFirmware()->setLEDStatus(FalconFirmware::GREEN_LED);
 		runIOLoop();
 
-		ros::AsyncSpinner spinner(1, &cb_queue_);
-		spinner.start();
-
-		geometry_msgs::PoseStamped p;
-		p.pose.orientation.w = 1.0;
-		p.header.frame_id = "falcon_base";
-
-		sensor_msgs::Joy joy_msg;
-		joy_msg.header.frame_id = "falcon_base";
-		joy_msg.buttons.resize(getFalconGrip()->getNumDigitalInputs());
-
-		std::array<double, 3> p_arr;
-
 		ros::Rate rate{ 1000 };
 		while(ros::ok()) {
 			if(runIOLoop()) {
-				auto const now{ ros::Time::now() };
-				p_arr = getPosition();
-				p.pose.position.x = p_arr[0];
-				p.pose.position.y = p_arr[1];
-				p.pose.position.z = p_arr[2];
-				p.header.stamp = now;
-				measured_cp_pub_.publish(p);
+				now_ = ros::Time::now();
 
-				joy_msg.header.stamp = now;
-				joy_msg.axes.resize(3);
-				joy_msg.axes[0] = p_arr[0];
-				joy_msg.axes[1] = p_arr[1];
-				joy_msg.axes[2] = p_arr[2];
+				measured_cp();
+				joy();
+			}
 
-				for(size_t i = 0; i < getFalconGrip()->getNumDigitalInputs(); ++i) {
-					joy_msg.buttons[i] = getFalconGrip()->getDigitalInput(i);
-				}
-				joy_pub_.publish(joy_msg);
-			}
-			{
-				std::lock_guard<std::mutex> lock(force_mutex_);
-				setForce(cmd_force_);
-			}
+			cmd_cf();
 			rate.sleep();
 		}
 
@@ -173,9 +199,6 @@ int main(int argc, char* argv[])
 {
     ros::init(argc,argv, "falcon");
 	ros::NodeHandle nh{"~"};
-
-	ros::AsyncSpinner spinner(1);
-	spinner.start();
 
 	Controller dev{ nh };
 
@@ -191,4 +214,3 @@ int main(int argc, char* argv[])
 
 	return 0;
 }
-
