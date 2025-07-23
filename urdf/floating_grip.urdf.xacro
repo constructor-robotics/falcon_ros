@@ -1,0 +1,52 @@
+<robot name="floating_gripper" xmlns:xacro="http://www.ros.org/wiki/xacro" xmlns:falcon_ros="http://www.falcon-ros.org">
+
+<!-- TODO: the mesh geometries here do not make much sense yet, but appears sufficient at first glance -->
+
+<link name="falcon_base">
+  <visual>
+    <origin xyz="0 0 0" rpy="${tau/4} 0 ${tau/2}"/>
+    <geometry>
+      <mesh filename="package://falcon_ros/meshes/Base.stl"/>
+    </geometry>
+
+    <material name="falcon_base_material">
+      <color rgba="0.6 0.6 0.6 1.0"/>
+    </material>
+  </visual>
+</link>
+
+<link name="falcon_front" />
+
+<joint name="falcon_front_joint" type="fixed">
+  <parent link="falcon_base"/>
+  <child link="falcon_front"/>
+  <origin xyz="0 0 0.08" rpy="0 0 0"/>
+</joint>
+
+<link name="falcon_grip">
+  <visual>
+    <origin xyz="0 0 0" rpy="${tau/2} 0 ${tau/4}"/>
+    <geometry>
+      <mesh filename="package://falcon_ros/meshes/Grip.stl"/>
+    </geometry>
+    <material name="falcon_grip_material">
+      <color rgba="0.5 0.5 0.5 1.0"/>
+    </material>
+  </visual>
+</link>
+
+<joint name="falcon_grip_joint" type="floating">
+  <parent link="falcon_base"/>
+  <child link="falcon_grip"/>
+  <origin xyz="0 0 0.0" rpy="0 0 0"/>
+</joint>
+
+<link name="world"/>
+
+<joint name="world_joint" type="fixed">
+  <parent link="world"/>
+  <child link="falcon_base"/>
+  <origin xyz="0 0 0" rpy="${tau/4} 0 0"/>
+</joint>
+
+</robot>

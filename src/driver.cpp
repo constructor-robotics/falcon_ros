@@ -19,7 +19,6 @@
 #include "falcon/kinematic/FalconKinematicStamper.h"
 
 using namespace libnifalcon;
-using namespace StamperKinematicImpl;
 
 class Controller : public FalconDevice {
 	ros::NodeHandle nh_;
@@ -53,7 +52,7 @@ public:
 		// set standard 4-button grip (again, the only grip directly available in the library)
 		setFalconGrip<FalconGripFourButton>();
 
-		std::string const frame_id = nh_.param<std::string>("frame_id", "falcon_base");
+		std::string const frame_id = nh_.param<std::string>("frame_id", "falcon_front");
 
 		// prepare published data
 		joy_.header.frame_id = frame_id;

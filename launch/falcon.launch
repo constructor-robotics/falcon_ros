@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<launch>
+    <include file="$(dirname)/upload_description.launch" />
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="screen">
+        <param name="publish_frequency" value="50.0"/>
+    </node>
+
+    <node name="falcon" pkg="falcon_ros" type="driver" output="screen">
+        <param name="frame_id" value="falcon"/>
+    </node>
+
+    <node name="grip_tf" pkg="falcon_ros" type="grip_transform"/>
+</launch>
