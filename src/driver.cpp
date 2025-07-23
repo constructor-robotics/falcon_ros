@@ -72,6 +72,8 @@ public:
 	}
 
 	~Controller() {
+		getFalconFirmware()->setLEDStatus(FalconFirmware::BLUE_LED | FalconFirmware::RED_LED | FalconFirmware::GREEN_LED);
+		runIOLoop(FALCON_LOOP_FIRMWARE);
 		close();
 	}
 
@@ -84,21 +86,23 @@ public:
 
 		bool const skip_checksum = false;
 
-		if (!isFirmwareLoaded()){
-			// this attempt to set the mode fails deterministically, but loadFirmware succeeds on first try this way
-			getFalconComm()->setFirmwareMode();
+		// running this check with I/O loops when no firmware is loaded breaks behavior after following upload, so we do not do it.
+		// if (isFirmwareLoaded())
+		// 	return true;
+
+		if(!getFalconFirmware()->loadFirmware(skip_checksum, NOVINT_FALCON_NVENT_FIRMWARE_SIZE, const_cast<uint8_t*>(NOVINT_FALCON_NVENT_FIRMWARE))){
+			ROS_DEBUG_STREAM("Attempt to load firmware failed. error code: " << getFalconFirmware()->getErrorCode() << " (device error code: " << getFalconComm()->getDeviceErrorCode() << ")");
+			close();
+			return false;
 		}
 
-		while(!isFirmwareLoaded()) {
-			if(getFalconFirmware()->loadFirmware(skip_checksum, NOVINT_FALCON_NVENT_FIRMWARE_SIZE, const_cast<uint8_t*>(NOVINT_FALCON_NVENT_FIRMWARE)))
-				break;
-			ROS_ERROR_STREAM("Failed to upload firmware.");
-
-			if(!ros::ok())
-				return false;
-		}
+		ROS_DEBUG("Firmware loaded");
 
 		return true;
+	}
+
+	bool initialized() {
+		return isOpen() && isFirmwareLoaded();
 	}
 
 	// block until device is homed (all joint stops were detected)
@@ -116,13 +120,13 @@ public:
 		if(!getFalconFirmware()->isHomed())
 			ROS_INFO("Falcon not currently homed. Move control all the way out then push straight all the way in.");
 
-		ros::Rate rate{ 20 };
+		ros::Rate rate{ 100 };
 		while(!getFalconFirmware()->isHomed())
 		{
 			if (!ros::ok())
 				return false;
 
-			runIOLoop(FALCON_LOOP_FIRMWARE);
+			runIOLoop();
 
 			rate.sleep();
 		}
@@ -197,15 +201,24 @@ public:
 
 int main(int argc, char* argv[])
 {
-    ros::init(argc,argv, "falcon");
+	ros::init(argc,argv, "falcon");
 	ros::NodeHandle nh{"~"};
 
 	Controller dev{ nh };
 
-	if(!dev.init())
-		return 1;
+	{
+		for(size_t i = 0; i < 3; ++i){
+			if(dev.init())
+				break;
+		}
+	}
 
-	ROS_INFO("device initialized");
+	if(!dev.initialized()) {
+		ROS_ERROR("Failed to initialize Falcon.");
+		return 1;
+	}
+
+	ROS_INFO("Falcon initialized.");
 
 	if(!dev.home())
 		return 1;
