@@ -52,7 +52,7 @@ public:
 		// set standard 4-button grip (again, the only grip directly available in the library)
 		setFalconGrip<FalconGripFourButton>();
 
-		std::string const frame_id = nh_.param<std::string>("frame_id", "falcon_front");
+		std::string const frame_id = nh_.param<std::string>("frame_id", "falcon");
 
 		// prepare published data
 		joy_.header.frame_id = frame_id;
