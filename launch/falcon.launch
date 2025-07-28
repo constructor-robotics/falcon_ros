@@ -9,5 +9,5 @@
         <param name="frame_id" value="falcon_front"/>
     </node>
 
-    <node name="grip_tf" pkg="falcon_ros" type="grip_transform"/>
+    <node name="falcon_grip_state" pkg="falcon_ros" type="grip_state"/>
 </launch>

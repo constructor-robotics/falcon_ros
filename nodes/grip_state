@@ -1,0 +1,65 @@
+#!/usr/bin/env python
+
+import rospy
+import tf
+from geometry_msgs.msg import PoseStamped, Point, Vector3
+from sensor_msgs.msg import Joy
+from std_msgs.msg import ColorRGBA
+from visualization_msgs.msg import Marker, MarkerArray
+
+class GripState:
+    '''
+    Publishes the current Grip position as TF transform to visualize the robot model grip
+    and markers for all grip buttons colored by their state.
+    '''
+    def __init__(self):
+        self.br = tf.TransformBroadcaster()
+
+        self.button_markers = MarkerArray()
+        self.button_markers.markers = [Marker() for _ in range(4)]
+        geometry = [
+            {'type': Marker.CUBE,   'scale': {'x': 0.0075, 'y': 0.0075, 'z': 0.015},  'position': {'x': 0.01,  'y': 0.025, 'z': 0}},
+            {'type': Marker.CUBE,   'scale': {'x': 0.01,   'y': 0.0075, 'z': 0.0075}, 'position': {'x': 0.0,   'y': 0.025, 'z': -0.01}},
+            {'type': Marker.SPHERE, 'scale': {'x': 0.01,   'y': 0.01,   'z': 0.01},   'position': {'x': 0.0,   'y': 0.028, 'z': 0}},
+            {'type': Marker.CUBE,   'scale': {'x': 0.0075, 'y': 0.0075, 'z': 0.015},  'position': {'x': -0.01, 'y': 0.025, 'z': 0.0}}
+        ]
+        for i, marker in enumerate(self.button_markers.markers):
+            marker.header.frame_id = "falcon_grip"
+            marker.action = Marker.ADD
+            marker.id = i
+            marker.color = ColorRGBA(0.4, 0.4, 0.4, 1.0)
+            marker.pose.orientation.w = 1.0
+            marker.pose.position = Point(**geometry[i]['position'])
+            marker.type = geometry[i]['type']
+            marker.scale = Vector3(**geometry[i]['scale'])
+        self.marker_pub = rospy.Publisher('falcon/grip_state', MarkerArray, queue_size=1)
+
+        rospy.Subscriber('falcon/measured_cp', PoseStamped, self.measured_cp_callback)
+        rospy.Subscriber('falcon/joy', Joy, self.joy_callback)
+
+    def measured_cp_callback(self, msg):
+        position = msg.pose.position
+        orientation = msg.pose.orientation
+        self.br.sendTransform(
+            (position.x, position.y, position.z),
+            (orientation.x, orientation.y, orientation.z, orientation.w),
+            msg.header.stamp,
+            "falcon_grip",
+            "falcon_front"
+        )
+
+    def joy_callback(self, msg):
+        assert len(msg.buttons) == 4, "Expected standard 4 grip buttons"
+
+        for b, m in zip(msg.buttons, self.button_markers.markers):
+            if b:
+                m.color = ColorRGBA(0.2, 0.7, 0.2, 1.0)
+            else:
+                m.color = ColorRGBA(0.4, 0.4, 0.4, 1.0)
+        self.marker_pub.publish(self.button_markers)
+
+
+if __name__ == '__main__':
+    rospy.init_node('grip_state')
+    GripState()
+    rospy.spin()
