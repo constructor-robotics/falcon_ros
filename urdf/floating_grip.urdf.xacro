@@ -46,7 +46,7 @@
 <joint name="world_joint" type="fixed">
   <parent link="world"/>
   <child link="falcon_base"/>
-  <origin xyz="0 0 0" rpy="${tau/4} 0 0"/>
+  <origin xyz="0 0 0" rpy="${tau/4} 0 ${tau/4}"/>
 </joint>
 
 </robot>
