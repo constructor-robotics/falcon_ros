@@ -2,7 +2,7 @@
 
 import rospy
 import numpy as np
-from geometry_msgs.msg import Point, PoseStamped, WrenchStamped
+from geometry_msgs.msg import PoseStamped, WrenchStamped
 from sensor_msgs.msg import Joy
 
 class Control:
@@ -18,7 +18,10 @@ class Control:
 
         self.servo_cf_msg = WrenchStamped()
         self.servo_cf_msg.header.frame_id = 'falcon_grip'
+        # commanded Wrench for low-level servo
         self.pub = rospy.Publisher('falcon/servo_cf', WrenchStamped, queue_size=1)
+        # commanded Wrench without gravity compensation
+        self.pub_gravcomp = rospy.Publisher('falcon/gravity_compensated_cf', WrenchStamped, queue_size=1)
 
         self.position = None
         self.measured_cp_sub = rospy.Subscriber('falcon/measured_cp', PoseStamped, self.measured_cp)
@@ -41,7 +44,14 @@ class Control:
             return
 
         force = self.gain * (self.setpoint_cp - self.position)
-        self.servo_cf_msg.wrench.force = Point(*force)
+        self.servo_cf_msg.wrench.force.x = force[0]
+        self.servo_cf_msg.wrench.force.y = force[1]
+        self.servo_cf_msg.wrench.force.z = force[2]
+        self.pub_gravcomp.publish(self.servo_cf_msg)
+
+        MECHANISM_MASS = 0.120 # approximate effective mass of the mechanism (in kg) - guessed
+        g = 9.81 # gravity constant (in m/s^2)
+        self.servo_cf_msg.wrench.force.y += g * MECHANISM_MASS
         self.pub.publish(self.servo_cf_msg)
 
     def measured_cp(self, msg):
