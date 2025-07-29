@@ -2,8 +2,12 @@ cmake_minimum_required(VERSION 3.10)
 project(falcon_ros)
 
 find_package(catkin REQUIRED COMPONENTS
- roscpp
- joy
+  geometry_msgs
+  joy
+  roscpp
+  sensor_msgs
+  tf2_ros
+  tf2_geometry_msgs
 )
 
 find_package(PkgConfig REQUIRED)

@@ -1,5 +1,5 @@
 //////////////////////////////////////////////////////////
-// Novint Falcon ROS Driver.
+// Novint Falcon ROS Driver
 //
 // 2025 Michael Goerner
 // based on code by Steven Martin
@@ -8,6 +8,7 @@
 #include <ros/ros.h>
 #include <ros/callback_queue.h>
 
+#include <std_srvs/SetBool.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/WrenchStamped.h>
 #include <sensor_msgs/Joy.h>
@@ -32,11 +33,13 @@ class Controller : public FalconDevice {
 
 	ros::Subscriber servo_cf_sub_;
 
+	std::atomic<bool> use_gravity_compensation_;
+	ros::ServiceServer use_gravity_compensation_srv_;
+
 	ros::Time now_; // time after last I/O loop
 
-	std::mutex force_mutex_;
 	std::array<double, 3> cmd_force_ {0.0, 0.0, 0.0};
-
+	std::mutex cmd_force_mutex_;
 public:
 	Controller(ros::NodeHandle nh) :
 		FalconDevice(),
@@ -63,8 +66,20 @@ public:
 
 		// ROS communication
 		nh_.setCallbackQueue(&cb_queue_);
+
 		measured_cp_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("measured_cp", 1, true);
 		joy_pub_ = nh_.advertise<sensor_msgs::Joy>("joy", 1, true);
+
+		use_gravity_compensation(true);
+		use_gravity_compensation_srv_ = nh_.advertiseService<std_srvs::SetBool::Request, std_srvs::SetBool::Response>(
+			"use_gravity_compensation",
+			[this](auto&& req, auto&& res) {
+				use_gravity_compensation(req.data);
+				res.success = true;
+				return true;
+			}
+		);
+
 		servo_cf_sub_ = nh_.subscribe<geometry_msgs::WrenchStamped>("servo_cf", 1, [=](auto&& msg) {
 			servo_cf(*msg);
 		});
@@ -135,10 +150,15 @@ public:
 		return true;
 	}
 
+	void use_gravity_compensation(bool use){
+		ROS_INFO_STREAM("Gravity compensation " << (use ? "active" : "disabled") << ".");
+		use_gravity_compensation_ = use;
+	}
+
 	// CRTK: update Cartesian force command
 	void servo_cf(const geometry_msgs::WrenchStamped& msg)
 	{
-		std::lock_guard<std::mutex> lock(force_mutex_);
+		std::lock_guard<std::mutex> lock{ cmd_force_mutex_ };
 		cmd_force_[0] = msg.wrench.force.x;
 		cmd_force_[1] = msg.wrench.force.y;
 		cmd_force_[2] = msg.wrench.force.z;
@@ -169,12 +189,23 @@ public:
 
 	// set Cartesian force command for next I/O loop
 	void cmd_cf(){
-		std::lock_guard<std::mutex> lock{ force_mutex_ };
-		setForce(cmd_force_);
+		std::array<double, 3> cmd{
+			[&]{
+				std::lock_guard<std::mutex> lock{ cmd_force_mutex_ };
+				return cmd_force_;
+			}()
+		 };
+
+		if(use_gravity_compensation_) {
+			double const g = 9.81; // m/s^2
+			double const effective_mass = 0.080; // kg, determined through controller performance
+			cmd[1] += g * effective_mass; // y points up in Falcon coordinate system
+		}
+		setForce(cmd);
 	}
 
 	void spin(){
-		ros::AsyncSpinner spinner{ 1, &cb_queue_ };
+		ros::AsyncSpinner spinner{ 2, &cb_queue_ };
 		spinner.start();
 
 		setForce({ 0, 0, 0 });
