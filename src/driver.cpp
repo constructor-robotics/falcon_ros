@@ -7,6 +7,8 @@
 
 #include <ros/ros.h>
 #include <ros/callback_queue.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 #include <std_srvs/SetBool.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -24,6 +26,13 @@ using namespace libnifalcon;
 class Controller : public FalconDevice {
 	ros::NodeHandle nh_;
 	ros::CallbackQueue cb_queue_;
+
+	// TF spins independently to allow for commands in other frames
+	tf2_ros::Buffer tf_buffer_;
+	tf2_ros::TransformListener tf_listener_{tf_buffer_, true};
+
+	// base frame of all internal calculations
+	std::string frame_id_;
 
 	geometry_msgs::PoseStamped measured_cp_;
 	ros::Publisher measured_cp_pub_;
@@ -55,13 +64,13 @@ public:
 		// set standard 4-button grip (again, the only grip directly available in the library)
 		setFalconGrip<FalconGripFourButton>();
 
-		std::string const frame_id = nh_.param<std::string>("frame_id", "falcon");
+		frame_id_ = nh_.param<std::string>("frame_id", "falcon_front");
 
 		// prepare published data
-		joy_.header.frame_id = frame_id;
+		joy_.header.frame_id = frame_id_;
 		joy_.axes.resize(3);
 		joy_.buttons.resize(getFalconGrip()->getNumDigitalInputs());
-		measured_cp_.header.frame_id = frame_id;
+		measured_cp_.header.frame_id = frame_id_;
 		measured_cp_.pose.orientation.w = 1.0;
 
 		// ROS communication
@@ -156,8 +165,21 @@ public:
 	}
 
 	// CRTK: update Cartesian force command
-	void servo_cf(const geometry_msgs::WrenchStamped& msg)
+	void servo_cf(geometry_msgs::WrenchStamped msg)
 	{
+		if(!msg.header.frame_id.empty() && msg.header.frame_id != frame_id_) {
+			geometry_msgs::TransformStamped transform;
+			try {
+				// assume static transform for force vector because this code should never wait
+				transform = tf_buffer_.lookupTransform(frame_id_, msg.header.frame_id, ros::Time(0));
+				// the Falcon cannnot apply torque
+				tf2::doTransform(msg.wrench.force, msg.wrench.force, transform);
+			} catch (tf2::TransformException& ex) {
+				ROS_WARN_STREAM_THROTTLE(0.1, "Failed to transform from " << msg.header.frame_id << " to " << frame_id_ << ": " << ex.what());
+				return;
+			}
+		}
+
 		std::lock_guard<std::mutex> lock{ cmd_force_mutex_ };
 		cmd_force_[0] = msg.wrench.force.x;
 		cmd_force_[1] = msg.wrench.force.y;
