@@ -51,9 +51,20 @@ class GripState:
     def joy_callback(self, msg):
         assert len(msg.buttons) == 4, "Expected standard 4 grip buttons"
 
-        for b, m in zip(msg.buttons, self.button_markers.markers):
+        BUTTON_COLORS = [
+            # blue
+            ColorRGBA(0.2, 0.2, 0.7, 1.0),
+            # green
+            ColorRGBA(0.2, 0.7, 0.2, 1.0),
+            # pink
+            ColorRGBA(0.7, 0.2, 0.7, 1.0),
+            # yellow
+            ColorRGBA(0.7, 0.7, 0.2, 1.0)
+        ]
+
+        for i, (b, m) in enumerate(zip(msg.buttons, self.button_markers.markers)):
             if b:
-                m.color = ColorRGBA(0.2, 0.7, 0.2, 1.0)
+                m.color = BUTTON_COLORS[i]
             else:
                 m.color = ColorRGBA(0.4, 0.4, 0.4, 1.0)
         self.marker_pub.publish(self.button_markers)
