@@ -18,10 +18,10 @@ class GripState:
         self.button_markers = MarkerArray()
         self.button_markers.markers = [Marker() for _ in range(4)]
         geometry = [
-            {'type': Marker.CUBE,   'scale': {'x': 0.0075, 'y': 0.0075, 'z': 0.015},  'position': {'x': 0.01,  'y': 0.025, 'z': 0}},
-            {'type': Marker.CUBE,   'scale': {'x': 0.01,   'y': 0.0075, 'z': 0.0075}, 'position': {'x': 0.0,   'y': 0.025, 'z': -0.01}},
+            {'type': Marker.CUBE,   'scale': {'x': 0.0075, 'y': 0.0085, 'z': 0.015},  'position': {'x': 0.01,  'y': 0.025, 'z': 0}},
+            {'type': Marker.CUBE,   'scale': {'x': 0.01,   'y': 0.0085, 'z': 0.0075}, 'position': {'x': 0.0,   'y': 0.025, 'z': -0.01}},
             {'type': Marker.SPHERE, 'scale': {'x': 0.01,   'y': 0.01,   'z': 0.01},   'position': {'x': 0.0,   'y': 0.028, 'z': 0}},
-            {'type': Marker.CUBE,   'scale': {'x': 0.0075, 'y': 0.0075, 'z': 0.015},  'position': {'x': -0.01, 'y': 0.025, 'z': 0.0}}
+            {'type': Marker.CUBE,   'scale': {'x': 0.0075, 'y': 0.0085, 'z': 0.015},  'position': {'x': -0.01, 'y': 0.025, 'z': 0.0}}
         ]
         for i, marker in enumerate(self.button_markers.markers):
             marker.header.frame_id = "falcon_grip"
