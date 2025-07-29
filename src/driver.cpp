@@ -220,7 +220,7 @@ public:
 
 		if(use_gravity_compensation_) {
 			double const g = 9.81; // m/s^2
-			double const effective_mass = 0.080; // kg, determined through controller performance
+			double const effective_mass = 0.090; // kg, determined through controller performance
 			cmd[1] += g * effective_mass; // y points up in Falcon coordinate system
 		}
 		setForce(cmd);
