@@ -21,6 +21,8 @@
 #include "falcon/grip/FalconGripFourButton.h"
 #include "falcon/kinematic/FalconKinematicStamper.h"
 
+#include <atomic>
+
 using namespace libnifalcon;
 
 class Controller : public FalconDevice {
