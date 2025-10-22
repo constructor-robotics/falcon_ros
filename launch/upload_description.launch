@@ -1,4 +1,4 @@
 <?xml version="1.0"?>
 <launch>
-    <param name="robot_description" command="xacro $(dirname)/../urdf/floating_grip.urdf.xacro" />
+    <param name="robot_description" command="xacro $(dirname)/../robots/standalone.urdf.xacro" />
 </launch>
