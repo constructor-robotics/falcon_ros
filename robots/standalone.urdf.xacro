@@ -1,0 +1,11 @@
+<robot name="floating_gripper" xmlns:xacro="http://www.ros.org/wiki/xacro" xmlns:falcon_ros="http://www.falcon-ros.org">
+<xacro:include filename="$(find falcon_ros)/urdf/floating_grip.urdf.xacro"/>
+<xacro:falcon/>
+<link name="world"/>
+<joint name="world_joint" type="fixed">
+  <parent link="world"/>
+  <child link="falcon_base"/>
+  <origin xyz="0 0 0" rpy="${tau/4} 0 ${tau/4}"/>
+</joint>
+
+</robot>

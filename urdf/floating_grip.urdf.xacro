@@ -1,7 +1,7 @@
 <robot name="floating_gripper" xmlns:xacro="http://www.ros.org/wiki/xacro" xmlns:falcon_ros="http://www.falcon-ros.org">
 
 <!-- TODO: the mesh geometries here do not make much sense yet, but appears sufficient at first glance -->
-
+<xacro:macro name="falcon">
 <link name="falcon_base">
   <visual>
     <origin xyz="0 0 0" rpy="${tau/4} 0 ${tau/2}"/>
@@ -40,13 +40,5 @@
   <child link="falcon_grip"/>
   <origin xyz="0 0 0.0" rpy="0 0 0"/>
 </joint>
-
-<link name="world"/>
-
-<joint name="world_joint" type="fixed">
-  <parent link="world"/>
-  <child link="falcon_base"/>
-  <origin xyz="0 0 0" rpy="${tau/4} 0 ${tau/4}"/>
-</joint>
-
+</xacro:macro>
 </robot>
