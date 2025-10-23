@@ -40,6 +40,6 @@ catkin_install_python(PROGRAMS nodes/grip_state nodes/example_p_control
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
-install(DIRECTORY udev
+install(DIRECTORY config udev urdf robots meshes launch
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
